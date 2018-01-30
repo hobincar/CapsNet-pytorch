@@ -162,6 +162,16 @@ if __name__ == '__main__':
     import torch.optim as optim
     from torchvision import datasets, transforms
     from torch.autograd import Variable
+    from datetime import datetime
+    from logger import Logger
+    import os
+
+    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID" # see issue #152
+    os.environ["CUDA_VISIBLE_DEVICES"]="1"
+
+    # Setup logger
+    strtime = datetime.now().strftime('%m%d_%H:%M')
+    logger = Logger('./logs/default/with_recon/{}'.format(strtime))
 
     # Training settings
     parser = argparse.ArgumentParser(description='CapsNet with MNIST')
@@ -171,7 +181,7 @@ if __name__ == '__main__':
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=250, metavar='N',
                         help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
+    parser.add_argument('--lr', type=float, default=0.0002, metavar='LR',
                         help='learning rate (default: 0.01)')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
@@ -180,7 +190,7 @@ if __name__ == '__main__':
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
     parser.add_argument('--routing_iterations', type=int, default=3)
-    parser.add_argument('--with_reconstruction', action='store_true', default=False)
+    parser.add_argument('--with_reconstruction', action='store_true', default=True)
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -223,6 +233,7 @@ if __name__ == '__main__':
 
     def train(epoch):
         model.train()
+        losses = []
         for batch_idx, (data, target) in enumerate(train_loader):
             if args.cuda:
                 data, target = data.cuda(), target.cuda()
@@ -242,6 +253,9 @@ if __name__ == '__main__':
                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                     epoch, batch_idx * len(data), len(train_loader.dataset),
                            100. * batch_idx / len(train_loader), loss.data[0]))
+            losses.append(loss.data[0])
+        logger.scalar_summary('train_loss', sum(losses) / len(losses), epoch)
+
 
     def test():
         model.eval()
@@ -268,6 +282,8 @@ if __name__ == '__main__':
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
             test_loss, correct, len(test_loader.dataset),
             100. * correct / len(test_loader.dataset)))
+        logger.scalar_summary('test_loss', test_loss, epoch)
+        logger.scalar_summary('test_accuracy', 100. * correct / len(test_loader.dataset), epoch)
         return test_loss
 
 
@@ -276,5 +292,5 @@ if __name__ == '__main__':
         test_loss = test()
         scheduler.step(test_loss)
         torch.save(model.state_dict(),
-                   '{:03d}_model_dict_{}routing_reconstruction{}.pth'.format(epoch, args.routing_iterations,
-                                                                             args.with_reconstruction))
+                   './models/with_recon/{:03d}_model_dict_{}routing_reconstruction{}.pth'.format(epoch, args.routing_iterations,
+                                                                                                 args.with_reconstruction))
