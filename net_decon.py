@@ -130,9 +130,12 @@ class FractionallyStridedConvolutionNet(nn.Module):
         N, C, D = x.size()
         mask = torch.zeros(N, C)
         ones = torch.ones_like(mask)
-        mask.scatter_(1, target.unsqueeze(1).data.cpu(), ones)
+        if x.is_cuda:
+            mask = mask.cuda()
+            ones = ones.cuda()
+        mask.scatter_(1, target.unsqueeze(1).data, ones)
         mask = mask.unsqueeze(2).expand_as(x)
-        x = torch.masked_select(x, Variable(mask.byte()).cuda())
+        x = torch.masked_select(x, Variable(mask.byte()))
         x = x.view(N, D)
 
         x = x.view(N, 1, 4, 4)
